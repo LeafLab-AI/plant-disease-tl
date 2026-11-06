@@ -1,0 +1,27 @@
+# Environments
+.venv/
+__pycache__/
+*.pyc
+
+# Data and experiment artifacts (versioned with DVC / MLflow, never in Git)
+data/*
+!data/.gitkeep
+mlruns/
+results/*
+!results/.gitkeep
+*.pt
+*.pth
+*.onnx
+
+# Secrets (NEVER commit)
+.env
+kaggle.json
+
+# Notebooks / tooling
+.ipynb_checkpoints/
+.coverage
+coverage.xml
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.scannerwork/

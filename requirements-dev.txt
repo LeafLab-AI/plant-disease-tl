@@ -1,0 +1,11 @@
+# Audit + test tooling (not needed at inference time)
+ruff
+mypy                        # lint, format, types
+bandit
+semgrep                     # SAST
+pip-audit                   # dependency CVEs
+pytest
+pytest-cov                  # tests + coverage.xml for SonarQube
+pre-commit
+nbstripout                  # strip notebook outputs before commit
+modelscan                   # unsafe model-file detection

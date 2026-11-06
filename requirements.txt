@@ -1,0 +1,15 @@
+# Runtime dependencies (pin exact versions with a lockfile before the final run)
+torch                       # core framework
+torchvision
+timm>=1.0                   # EfficientNetV2, MobileNetV4, ConvNeXtV2, ViT-Base
+scikit-learn                # metrics, StratifiedKFold
+pytorch-grad-cam            # Grad-CAM (CNN + ViT)
+mlflow                      # experiment tracking
+omegaconf                   # config management
+albumentations              # augmentation
+gradio                      # demo app
+onnx
+onnxruntime                 # export + latency benchmark
+fvcore                      # FLOPs counting
+imagehash                   # near-duplicate detection (data leakage check)
+safetensors                 # safe weight serialization (no pickle)
