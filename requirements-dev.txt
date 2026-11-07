@@ -9,3 +9,5 @@ pytest-cov                  # tests + coverage.xml for SonarQube
 pre-commit
 nbstripout                  # strip notebook outputs before commit
 modelscan                   # unsafe model-file detection
+kaggle                      # dataset download (scripts/download_data.py)
+six                         # missing runtime dep of kaggle 2.2.5
