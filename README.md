@@ -7,11 +7,9 @@
 
 ![Course](https://img.shields.io/badge/Course-Deep%20Learning-blue)
 ![Program](https://img.shields.io/badge/Master-ISI%20S3-green)
-![Year](https://img.shields.io/badge/Academic%20Year-2025--2026-orange)
-![Framework](https://img.shields.io/badge/PyTorch%20%2B%20timm-red)
+![Year](https://img.shields.io/badge/Academic%20Year-2026--2027-green)
+![Framework](https://img.shields.io/badge/TensorFlow%20%2B%20Keras%203-orange)
 ![Status](https://img.shields.io/badge/Status-In%20Progress-yellow)
-![CI](https://img.shields.io/badge/CI-GitHub%20Actions-informational)
-![Security](https://img.shields.io/badge/Security-CodeQL%20%7C%20Bandit%20%7C%20pip--audit-success)
 ![Quality Gate](https://img.shields.io/badge/Quality%20Gate-SonarQube-lightgrey)
 
 Département d'Informatique · Faculté des Sciences Semlalia, Université Cadi Ayyad, Marrakech
@@ -58,155 +56,115 @@ under identical training conditions, and explain predictions with **Grad-CAM**.
 
 | Layer | Choice | Why it fits this project |
 |---|---|---|
-| **Deep learning** | **PyTorch + [timm](https://github.com/huggingface/pytorch-image-models)** | All 4 required models (EfficientNetV2, MobileNetV4, ConvNeXtV2, ViT-Base) ship with pretrained weights behind one API: `timm.create_model(name, pretrained=True)`. TensorFlow/Keras has no equivalent for MobileNetV4 / ConvNeXtV2. |
-| **Training speed** | Mixed precision (AMP), `channels_last`, `torch.compile` (optional) | Roughly 2x faster on a free Colab/Kaggle GPU, which makes 12+ runs realistic. |
-| **Data & augmentation** | torchvision `transforms.v2` or Albumentations, scikit-learn (`StratifiedKFold`) | Stratified splits and k-fold cross-validation as required by the brief. |
-| **Explainability** | `pytorch-grad-cam` | Supports CNNs and ViT (ViT needs a `reshape_transform`). |
-| **Experiment tracking** | **MLflow** (local, free) | Logs params, curves, metrics, artifacts per run. Same API as managed MLflow on Databricks if you migrate later. |
+| **Deep learning** | **TensorFlow 2 + Keras 3**, with **KerasHub** (`keras-hub`) for pretrained backbones | Keras `fit()` / callbacks give a short, readable training loop; `tf.data` gives fast input pipelines. Pretrained-model availability per architecture is detailed below. |
+| **Training speed** | `tf.data` (`cache`, `prefetch(AUTOTUNE)`), Keras mixed precision, XLA (`jit_compile=True`, optional) | Keeps the free Colab/Kaggle GPU busy, which makes 12+ runs realistic. |
+| **Data & augmentation** | `tf.data` + Keras preprocessing layers (`RandomFlip`, `RandomRotation`, `RandomZoom`, `RandomContrast`), scikit-learn (`StratifiedKFold`) | Augmentation runs on the GPU inside the model/pipeline. Stratified splits and k-fold cross-validation as required by the brief. |
+| **Explainability** | Grad-CAM implemented with `tf.GradientTape` (optionally `tf-keras-vis`) | Short custom implementation for the CNNs. For ViT-Base, use the last transformer block's patch tokens reshaped to a 14x14 grid (or attention rollout). |
+| **Run logging** | Plain files per run in `results/<run>/` (`config.yaml`, `history.csv`, `metrics.json`, figures) | No server or account needed. Files are downloaded from the Kaggle/Colab output and compared with a small pandas script. |
 | **Data versioning** | **DVC** (or Kaggle as the source of truth) | Reproducible dataset + split manifest without committing images to Git. |
 | **Config** | YAML + OmegaConf/Hydra | One shared `base.yaml` guarantees "same training conditions" across models. |
 | **Demo app** | **Gradio** on Hugging Face Spaces | Upload a leaf, get top-k prediction + Grad-CAM overlay. Free hosting, shareable link for the jury. |
-| **Model export** | ONNX / ONNX Runtime (+ INT8 quantization) | Backs the "smartphone deployment" perspective with real latency and size numbers. |
-| **Model hosting** | Hugging Face Hub | Versioned weights for the demo app. |
-| **Quality & CI** | Ruff, pre-commit, pytest (smoke tests), GitHub Actions | Clean commit history and a reproducible repo, both graded deliverables. |
-| **Packaging** | `uv` or `pip-tools` lockfile, optional Docker | Same environment on WSL, Colab and CI. |
+| **Model export** | **TensorFlow Lite** (+ post-training quantization) | Native to TensorFlow. Backs the "smartphone deployment" perspective with real latency and file-size numbers. |
+| **Model hosting** | Hugging Face Hub | Versioned Keras weights for the demo app. |
+| **Code audit** | **SonarQube** (see dedicated section) | The only automated quality/security tool; regular commits give a clean Git history, a graded deliverable. |
+| **Packaging** | `uv` or `pip-tools` lockfile, optional Docker | Same environment on WSL, Kaggle and Colab. |
+
+### Pretrained model availability in TensorFlow / Keras
+
+| Model | Source in the TF/Keras ecosystem | Status |
+|---|---|---|
+| **EfficientNetV2** | `keras.applications` (`EfficientNetV2B0`...`L`) or KerasHub `EfficientNetImageClassifier` presets | ✅ Official |
+| **ViT-Base** | KerasHub `ViTImageClassifier`, preset `vit_base_patch16_224_imagenet` (ImageNet-21k variant also available) | ✅ Official |
+| **ConvNeXtV2** | `kerasformers` (Keras 3 conversion of the timm weights, runs on the TensorFlow backend). `keras.applications` only ships ConvNeXt **V1**. | ⚠️ Third-party, validate before relying on it |
+| **MobileNetV4** | No official TensorFlow weights found at the time of writing (the public MobileNetV4 weights are in timm / PyTorch). | ❌ Verify `kerasformers` coverage, otherwise see fallback |
+
+> **Fallback for MobileNetV4:** use **MobileNetV3-Large** (`keras.applications` / KerasHub) as the
+> lightweight mobile-class model, and state this substitution explicitly in the paper and to the
+> supervisor, since the brief's results table lists MobileNetV4. Decide this **before** the first
+> training run so all comparisons stay consistent.
 
 ### Compute strategy
 
 | Stage | Environment | Notes |
 |---|---|---|
-| Development, debugging, unit tests | **WSL2 (Ubuntu) or native Linux** + VS Code | Fast iteration on a small data subset. |
+| Development and debugging | **WSL2 (Ubuntu) or native Linux** + VS Code | Fast iteration on a small data subset. TensorFlow has no native-Windows GPU support (versions 2.11+), so use WSL2/Linux for a local GPU. |
 | Main training (12+ runs) | **Kaggle Notebooks** (preferred) or **Google Colab** | The dataset already lives on Kaggle (no download). Free GPU, weekly quota. Checkpoint every epoch (sessions can disconnect). |
-| Tracking server | MLflow local file store, synced as an artifact | No cloud account needed. |
+| Run logs | `results/<run>/` files saved to the Kaggle/Colab output | Download them after each session; nothing to host. |
 | Demo | Hugging Face Spaces (Gradio) | CPU is enough for inference. |
-| Databricks / cloud ML platforms | **Optional, not recommended for training here** | Free tiers have limited GPU access. Overkill for a dataset of this size. Worth it only if you want managed MLflow for the report. |
+| Databricks / cloud ML platforms | **Optional, not recommended for training here** | Free tiers have limited GPU access. Overkill for a dataset of this size. Not needed for this project. |
 
 ```text
 # requirements.txt (pin exact versions with a lockfile before the final run)
-torch, torchvision          # core framework
-timm>=1.0                   # EfficientNetV2, MobileNetV4, ConvNeXtV2, ViT-Base
+tensorflow                  # TF 2.x runtime (use the GPU build on WSL2/Linux)
+keras>=3                    # Keras 3 API
+keras-hub                   # EfficientNetV2, ViT-Base presets
+kerasformers                # ConvNeXtV2 (and possibly MobileNetV4), verify availability
 scikit-learn                # metrics, StratifiedKFold
-pytorch-grad-cam            # Grad-CAM (CNN + ViT)
-mlflow                      # experiment tracking
+pandas                      # run logs (CSV) and results tables
 omegaconf                   # config management
-albumentations              # augmentation (or torchvision.transforms.v2)
 gradio                      # demo app
-onnx, onnxruntime           # export + latency benchmark
-fvcore                      # FLOPs counting
 imagehash                   # near-duplicate detection (data leakage check)
-ruff, pytest, pre-commit    # quality
-safetensors                 # safe weight serialization (no pickle)
-```
-
-```text
-# requirements-dev.txt  (audit + test tooling, not needed at inference time)
-ruff, mypy                  # lint, format, types
-bandit, semgrep             # SAST
-pip-audit                   # dependency CVEs
-pytest, pytest-cov          # tests + coverage.xml for SonarQube
-nbstripout                  # strip notebook outputs before commit
-modelscan                   # unsafe model-file detection
+nbstripout                  # strip notebook outputs before commit (git filter)
 ```
 
 ### Rigor safeguards (what makes the comparison trustworthy)
 
 - **Leakage check:** perceptual-hash deduplication *before* splitting, so augmented copies of the same leaf never cross train/val/test.
 - **Fair comparison:** same input size (224), seed, epochs, augmentation and budget for all models. Learning rate chosen per model from a small, equal-size sweep (ViT needs a lower LR than CNNs).
-- **Clear strategy definitions:** feature extraction = frozen backbone + BN in eval mode; partial FT = last N stages unfrozen (same fraction for every model); full FT = everything trainable.
+- **Clear strategy definitions:** feature extraction = frozen backbone + BatchNorm layers in inference mode (`training=False`); partial FT = last N stages unfrozen (same fraction for every model); full FT = everything trainable.
 - **Statistics:** several seeds, report mean ± std, McNemar test for the top models.
 - **Imbalance:** report macro-F1 and per-class recall, not only accuracy.
-- **Efficiency beyond parameters:** FLOPs, CPU latency, ONNX file size, peak memory.
+- **Efficiency beyond parameters:** FLOPs (TensorFlow profiler), CPU latency, TFLite file size, peak memory.
 - **Robustness:** accuracy under blur, noise, brightness/contrast shifts, plus an out-of-distribution test on field-condition images.
 
-## 🔒 Code Audit & Security
+## 🔒 Code Audit with SonarQube
 
-Quality and security are checked **automatically on every push and pull request**
-(GitHub Actions), and the same checks run locally before each commit (pre-commit).
+**SonarQube is the single audit tool of this project.** The code is analysed on SonarQube Cloud
+(automatic analysis of the GitHub repo, if available on your plan) or with `sonar-scanner` run locally.
+The quality gate must be green before the final submission.
 
-| Concern | Tool | Scope in this project |
-|---|---|---|
-| **Quality gate + dashboard** | **SonarQube Cloud** (or self-hosted SonarQube Community Build) | Bugs, code smells, duplication, complexity, coverage, security hotspots. One public dashboard to show the jury. |
-| **SAST (primary)** | **GitHub CodeQL** | Deep semantic analysis of Python, results appear in the repo's *Security* tab. |
-| **SAST (Python-specific)** | **Bandit** + **Semgrep** | `pickle`/`eval`/`subprocess` misuse, hard-coded secrets, unsafe deserialization, insecure file handling. |
-| **Dependency vulnerabilities** | **pip-audit** + **Dependabot** | CVEs in `torch`, `gradio`, `pillow`, etc. and automatic update PRs. |
-| **Secret scanning** | **Gitleaks** (pre-commit) + GitHub secret scanning / push protection | Kaggle token, Hugging Face token, MLflow credentials. |
-| **Lint, format, types** | **Ruff** + **mypy** (or pyright) | Style, dead imports, type errors, enforced by pre-commit. |
-| **Tests & coverage** | **pytest** + **pytest-cov** | Smoke tests per model, unit tests for splits/metrics, coverage sent to Sonar. |
-| **Model file safety** | **safetensors**, `torch.load(..., weights_only=True)`, **ModelScan** | Pickle-based checkpoints can execute code on load. Never load untrusted `.pt`/`.pth` files. |
-| **Container (if Docker used)** | **Hadolint** + **Trivy** | Dockerfile best practices and image CVE scan. |
-| **Supply chain (optional)** | **OpenSSF Scorecard**, SBOM via `cyclonedx-py` | Repo hygiene score and a bill of materials for the paper's reproducibility section. |
+| Item | Choice |
+|---|---|
+| **Tool** | **SonarQube Cloud** (hosted) or self-hosted SonarQube Community Build |
+| **Analysed** | `src/`, `app/`, `scripts/` (Python) |
+| **Reports** | Bugs, vulnerabilities, security hotspots, code smells, duplication, cognitive complexity (no coverage: the project has no automated tests) |
+| **Config** | `sonar-project.properties` at the repo root |
+| **Token** | `SONAR_TOKEN` kept in an environment variable, never in code |
+| **Dashboard** | Link to be added in the badge above and in the paper |
 
-> **Why not SonarQube alone?** SonarQube is the best *dashboard* and quality gate, but its
-> free tiers have limited security rules for Python. CodeQL + Bandit/Semgrep cover the
-> security side, `pip-audit` covers dependencies, Gitleaks covers secrets. Use them together.
-
-### ML-specific security checklist
-
-- **Secrets:** Kaggle (`kaggle.json`), Hugging Face and MLflow tokens live only in environment variables / CI secrets. Never in notebooks, configs or Git history.
-- **Notebooks:** strip outputs before commit (`nbstripout`). Outputs often leak paths, tokens and data samples.
-- **Model files:** publish weights as `safetensors`, load with `weights_only=True`, pin the exact source and revision of every pretrained checkpoint.
-- **Dataset provenance:** record the Kaggle dataset version and licence, and the checksum of the downloaded archive.
-- **Gradio demo:** limit upload size and file types (images only), re-encode images with Pillow before inference, add a request queue / rate limit, keep `share=False` and `debug=False` in production, pin the `gradio` version (the library has had security advisories).
-- **Reproducibility = integrity:** locked dependencies, fixed seeds, versioned split manifest.
-- **Repo hygiene:** branch protection on `main`, required status checks, signed commits (optional), `SECURITY.md` describing how to report a vulnerability.
+> SonarQube analyses **source code only**. It does not scan dependency CVEs, secrets in Git
+> history or model files, so the practices below are followed manually.
 
 ### Quality gate (suggested thresholds)
 
 ```text
 Sonar quality gate on NEW code:
-  - 0 blocker / critical issues         # hard fail
-  - 0 security hotspots left unreviewed # review each one: fix or mark safe with a reason
+  - 0 blocker / critical issues          # hard fail
+  - 0 security hotspots left unreviewed  # review each one: fix, or mark safe with a reason
   - duplication  < 3%
-  - coverage     >= 60% on src/         # training loops are hard to cover; target data, metrics, strategies
-CI must pass before merge:
-  - ruff, mypy, bandit, pip-audit, gitleaks, pytest, CodeQL
+Coverage condition: disabled          # no automated tests in this project
+Submission rule: gate green on the SonarQube dashboard before the final push
 ```
 
-### Run the audit locally
+### Manual security practices (outside SonarQube's scope)
+
+- **Secrets:** Kaggle (`kaggle.json`) and Hugging Face tokens live only in environment variables, never in notebooks, configs or Git history.
+- **Notebooks:** strip outputs before commit (`nbstripout`). Outputs often leak paths, tokens and data samples.
+- **Model files:** save as `.keras` / `.weights.h5`, load with `safe_mode=True` (Keras default), pin the source and revision of every pretrained checkpoint. Never load models from untrusted sources (legacy formats and custom layers can execute code).
+- **Dependencies:** pin versions with a lockfile and review upgrades before the final run.
+- **Dataset provenance:** record the Kaggle dataset version, licence and the checksum of the downloaded archive.
+- **Gradio demo:** limit upload size and file types (images only), re-encode images with Pillow before inference, keep `share=False` and `debug=False` in production, pin the `gradio` version.
+- **Repo hygiene:** branch protection on `main`, regular small commits, `SECURITY.md` describing how to report a vulnerability.
+
+### Run the analysis locally
 
 ```bash
-# Lint, format and type-check
-ruff check . && ruff format --check .      # style + common bugs
-mypy src/                                   # type errors
+# Install nbstripout as a git filter once (strips notebook outputs on commit, no pre-commit needed)
+nbstripout --install
 
-# Security (SAST + dependencies + secrets)
-bandit -r src/ app/ -ll                     # -ll = medium severity and above
-semgrep --config auto src/ app/             # community Python/security rules
-pip-audit -r requirements.txt               # known CVEs in dependencies
-gitleaks detect --source . --no-banner      # secrets in files and git history
-
-# Tests + coverage (feeds SonarQube)
-pytest --cov=src --cov-report=xml           # writes coverage.xml
-
-# Optional: scan the model file and the container
-modelscan -p results/best_model.pt          # detects unsafe pickle payloads
-trivy image <ORG_NAME>/<REPO_NAME>:latest   # image vulnerabilities
-```
-
-```yaml
-# .github/workflows/ci.yml  (excerpt: pin actions to the current major version or a commit SHA)
-name: CI
-on: [push, pull_request]
-permissions:
-  contents: read              # least privilege for the default token
-jobs:
-  quality-security:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with: { fetch-depth: 0 }              # full history: needed by Sonar and Gitleaks
-      - uses: actions/setup-python@v5
-        with: { python-version: "3.11" }
-      - run: pip install -r requirements.txt -r requirements-dev.txt
-      - run: ruff check . && mypy src/        # lint + types
-      - run: bandit -r src/ app/ -ll          # SAST
-      - run: pip-audit -r requirements.txt    # dependency CVEs
-      - run: pytest --cov=src --cov-report=xml
-      - uses: SonarSource/sonarqube-scan-action@v5   # check the latest major version
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}     # stored as a repo secret, never in code
-  codeql:                                             # separate workflow file in practice
-    uses: ./.github/workflows/codeql.yml
+# Analyse with SonarScanner (needs the CLI and a token from your SonarQube Cloud account)
+export SONAR_TOKEN=<your-token>              # PowerShell: $env:SONAR_TOKEN = "<your-token>"
+sonar-scanner                                # reads sonar-project.properties
 ```
 
 ## 🔁 Workflow
@@ -226,17 +184,8 @@ Data ─▶ Pre-processing ─▶ Split (train/val/test) ─▶ Augmentation
 .
 ├── README.md                 # Project description, dependencies, how to run
 ├── requirements.txt          # Dependencies (+ lockfile)
-├── requirements-dev.txt      # Audit/test tools (ruff, mypy, bandit, pip-audit, pytest-cov)
-├── pyproject.toml            # Ruff / mypy / pytest config
-├── sonar-project.properties  # SonarQube project key, sources, coverage report path
+├── sonar-project.properties  # SonarQube project key and analysed sources
 ├── SECURITY.md               # How to report a vulnerability
-├── .pre-commit-config.yaml   # Ruff, gitleaks, nbstripout on every commit
-├── .gitleaks.toml            # Secret-scanning rules / allowlist
-├── .github/
-│   ├── dependabot.yml        # Automatic dependency update PRs
-│   └── workflows/
-│       ├── ci.yml            # Lint, types, SAST, dependency audit, tests, Sonar
-│       └── codeql.yml        # CodeQL analysis (push, PR, weekly schedule)
 ├── Dockerfile                # Optional: identical env everywhere
 ├── dvc.yaml                  # Optional: data + split versioning
 ├── configs/                  # One YAML per experiment (model x strategy)
@@ -244,20 +193,19 @@ Data ─▶ Pre-processing ─▶ Split (train/val/test) ─▶ Augmentation
 ├── data/                     # Not tracked by git (see "Quick Start")
 ├── src/
 │   ├── datasets.py           # Loading, dedup, stratified split, augmentation
-│   ├── models.py             # timm backbones + CNN from scratch
+│   ├── models.py             # Keras backbones (KerasHub / kerasformers) + CNN from scratch
 │   ├── strategies.py         # freeze / partial unfreeze / full fine-tune
-│   ├── train.py              # Training loop (AMP, checkpoints, MLflow logging)
+│   ├── train.py              # Keras training (mixed precision, checkpoints, CSV/JSON run logs)
 │   ├── evaluate.py           # Metrics, confusion matrix, ROC/AUC
 │   ├── robustness.py         # Corruption + out-of-distribution tests
-│   ├── benchmark.py          # FLOPs, latency, ONNX size
+│   ├── benchmark.py          # FLOPs, latency, TFLite size
 │   └── gradcam.py            # Grad-CAM visualisations
 ├── app/
 │   └── app.py                # Gradio demo (prediction + Grad-CAM overlay)
 ├── scripts/
-│   └── export_onnx.py        # ONNX export + INT8 quantization
-├── tests/                    # Smoke tests (one forward/backward pass per model)
+│   └── export_tflite.py      # TFLite export + post-training quantization
 ├── notebooks/                # EDA and Kaggle/Colab entry points
-├── results/                  # Curves, tables, confusion matrices, Grad-CAM figures
+├── results/                  # One folder per run: config, history.csv, metrics.json, figures
 ├── paper/                    # English paper (LaTeX / Word) + figures
 └── CONTRIBUTIONS.md          # Who did what (required deliverable)
 ```
@@ -293,15 +241,12 @@ python -m src.gradcam --run results/efficientnetv2_partial_ft --n 12
 python -m src.benchmark --run results/efficientnetv2_partial_ft
 python -m src.robustness --run results/efficientnetv2_partial_ft
 
-# 9. Browse all experiments (curves, metrics, artifacts)
-mlflow ui --port 5000
-
-# 10. Launch the demo locally (same app is deployed on Hugging Face Spaces)
+# 9. Launch the demo locally (same app is deployed on Hugging Face Spaces)
 python app/app.py
 
-# 11. Install hooks once, then audit before pushing (see "Code Audit & Security")
-pip install -r requirements-dev.txt && pre-commit install
-pre-commit run --all-files
+# 10. Strip notebook outputs on commit, then run the SonarQube analysis (see "Code Audit with SonarQube")
+nbstripout --install
+sonar-scanner
 ```
 
 ## 📊 Results
@@ -318,7 +263,7 @@ pre-commit run --all-files
 
 **Efficiency & robustness (extra table, supports "lightest" and "most robust"):**
 
-| Model | FLOPs | CPU latency (ms) | ONNX size (MB) | Acc. under blur / noise / brightness | OOD accuracy |
+| Model | FLOPs | CPU latency (ms) | TFLite size (MB) | Acc. under blur / noise / brightness | OOD accuracy |
 |---|---|---|---|---|---|
 | EfficientNetV2 | – | – | – | – | – |
 | MobileNetV4 | – | – | – | – | – |
@@ -346,7 +291,7 @@ A Gradio app (Hugging Face Spaces) lets anyone upload a leaf image and get the p
 
 - [ ] Original work
 - [ ] Git repo: clean commented code, `README.md` (description, dependencies, run procedure), regular commit history
-- [ ] Quality gate green (CI, CodeQL, SonarQube), no secrets in code or Git history, dependencies audited
+- [ ] SonarQube quality gate green, no secrets in code or Git history
 - [ ] Paper **in English** following the prescribed structure (Abstract → Conclusion, with GitHub link inside)
 - [ ] Team contributions table at the end of the paper
 - [ ] Final submission (code + paper) **no later than the DL exam day** (no changes accepted afterwards)
