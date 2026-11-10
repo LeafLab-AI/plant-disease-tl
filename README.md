@@ -1,9 +1,10 @@
-<div align="center">
+ <div align="center">
 
 # Transfer Learning for Plant Disease Detection
 
 **A Comparative Study of EfficientNetV2, MobileNetV4, ConvNeXtV2, and ViT-Base**
-**under Three Adaptation Regimes: Feature Extraction · Partial Fine-Tuning · Full Fine-Tuning**
+
+**Under Three Adaptation Regimes: Feature Extraction · Partial Fine-Tuning · Full Fine-Tuning**
 
 ![Course](https://img.shields.io/badge/Course-Deep%20Learning-blue)
 ![Program](https://img.shields.io/badge/Master-ISI%20S3-green)
@@ -13,6 +14,7 @@
 ![Quality Gate](https://img.shields.io/badge/Quality%20Gate-SonarQube-lightgrey)
 
 Département d'Informatique · Faculté des Sciences Semlalia, Université Cadi Ayyad, Marrakech
+
 Supervised by **Pr. Mustapha AATILA**
 
 </div>
@@ -21,7 +23,7 @@ Supervised by **Pr. Mustapha AATILA**
 
 ## Overview
 
-Plant diseases inflict significant agricultural losses globally. Traditional manual diagnosis is labor-intensive, subjective, and difficult to scale. While Convolutional Neural Networks (CNNs) offer a promising automated solution, they typically require massive annotated datasets—a resource often scarce in agricultural domains. 
+Plant diseases inflict significant agricultural losses globally. Traditional manual diagnosis is labor-intensive, subjective, and difficult to scale. While Convolutional Neural Networks (CNNs) offer a promising automated solution, they typically require massive annotated datasets—a resource often scarce in agricultural domains.
 
 This study investigates the following research question:
 
@@ -59,7 +61,7 @@ This project evaluates modern pre-trained architectures against a baseline CNN t
 | **Model Interpretability** | Grad-CAM implemented via `tf.GradientTape` | Provides verifiable symptom localization for CNNs. For ViT-Base, terminal transformer block patch tokens are reshaped into a spatial grid. |
 | **Experiment Tracking** | Localized directory logging (`results/<run>/` containing `config.yaml`, `history.csv`, `metrics.json`) | Ensures self-contained, reproducible experiment logs without relying on external telemetry servers. |
 | **Data Versioning** | **DVC** (Data Version Control) | Maintains a reproducible dataset and split manifest without bloating the version control repository with raw images. |
-| **Configuration Management**| YAML + OmegaConf/Hydra | A unified `base.yaml` configuration enforces identical training parameters across all architectural variations. |
+| **Configuration Management** | YAML + OmegaConf/Hydra | A unified `base.yaml` configuration enforces identical training parameters across all architectural variations. |
 | **Demonstration Application** | **Gradio** deployed via Hugging Face Spaces | Provides an interactive interface for inference and real-time Grad-CAM overlay visualization. |
 | **Model Exportation** | **TensorFlow Lite** (incorporating post-training quantization) | Evaluates deployment feasibility for mobile and edge devices by measuring true inference latency and memory footprint. |
 | **Code Quality Assurance** | **SonarQube** | Automates static code analysis, ensuring security, maintainability, and standard compliance prior to academic submission. |
@@ -78,8 +80,8 @@ This project evaluates modern pre-trained architectures against a baseline CNN t
 ### Methodological Safeguards for Comparative Rigor
 
 - **Data Leakage Prevention:** Perceptual hashing is applied prior to dataset splitting to ensure augmented variations of identical samples do not cross-contaminate training, validation, and testing sets.
-- **Controlled Comparisons:** Standardized input dimensions (224x224), deterministic seeding, and uniform augmentation parameters are enforced. Learning rates are independently optimized per architecture via a controlled hyperparameter sweep.
-- **Strategy Definitions:** 
+- **Controlled Comparisons:** Standardized input dimensions (224 × 224), deterministic seeding, and uniform augmentation parameters are enforced. Learning rates are independently optimized per architecture via a controlled hyperparameter sweep.
+- **Strategy Definitions:**
   - *Feature Extraction:* Backbone frozen; BatchNorm layers locked in inference mode (`training=False`).
   - *Partial Fine-Tuning:* Terminal stages unfrozen (consistent proportional depth across models).
   - *Full Fine-Tuning:* All parameters set to trainable.
@@ -95,9 +97,10 @@ This repository is subject to rigorous static analysis using **SonarQube** to en
 
 ```text
 SonarQube Quality Gate Requirements (New Code):
-  - 0 Blocker or Critical issues
-  - 0 Unreviewed Security Hotspots 
-  - Code Duplication < 3%
+
+- 0 Blocker or Critical issues
+- 0 Unreviewed Security Hotspots
+- Code Duplication < 3%
 ```
 
 ### Security and Best Practices
@@ -109,38 +112,46 @@ SonarQube Quality Gate Requirements (New Code):
 
 ## Execution Workflow
 
+The following diagram illustrates the complete experimental pipeline, from dataset ingestion to model evaluation and interpretability.
+
 ```mermaid
 flowchart TD
-    %% Define styles
-    classDef process fill:#f9f9f9,stroke:#333,stroke-width:1px;
-    classDef data fill:#e1f5fe,stroke:#0277bd,stroke-width:1px;
-    classDef output fill:#e8f5e9,stroke:#2e7d32,stroke-width:1px;
+    %% Dataset preparation
+    Data[("Dataset")]
+    Preproc["Pre-processing<br/>Resize and Normalize"]
+    Split{"Stratified Split<br/>Train / Validation / Test"}
+    Aug["Data Augmentation<br/>GPU-Accelerated"]
 
-    %% Nodes
-    Data[(Dataset)] ::: data
-    Preproc[Pre-processing<br/>Resize & Normalize] ::: process
-    Split{Stratified Split<br/>Train / Val / Test} ::: process
-    Aug[Data Augmentation<br/>GPU-Accelerated] ::: process
-    
-    Strat[Architecture Selection &<br/>Adaptation Strategy] ::: data
-    Train[Training Pipeline<br/>Cross-Validation] ::: process
-    Eval[Evaluation & Inference] ::: process
-    
-    Preds([Predictions]) ::: output
-    Metrics[Metrics & ROC/AUC] ::: output
-    GradCAM[Grad-CAM Interpretability] ::: output
+    %% Architecture and training
+    Strat["Architecture Selection<br/>and Adaptation Strategy"]
+    Train["Training Pipeline<br/>Cross-Validation"]
+    Eval["Evaluation and Inference"]
 
-    %% Flow
+    %% Outputs
+    Preds(["Predictions"])
+    Metrics["Metrics and ROC/AUC"]
+    GradCAM["Grad-CAM Interpretability"]
+
+    %% Workflow connections
     Data --> Preproc
     Preproc --> Split
     Split --> Aug
     Aug --> Train
     Strat --> Train
     Train --> Eval
-    
+
     Eval --> Preds
     Eval --> Metrics
     Eval --> GradCAM
+
+    %% Styling
+    classDef process fill:#f9f9f9,stroke:#333,stroke-width:1px,color:#222
+    classDef data fill:#e1f5fe,stroke:#0277bd,stroke-width:1px,color:#01579b
+    classDef output fill:#e8f5e9,stroke:#2e7d32,stroke-width:1px,color:#1b5e20
+
+    class Preproc,Split,Aug,Train,Eval process
+    class Data,Strat data
+    class Preds,Metrics,GradCAM output
 ```
 
 ## Repository Structure
@@ -175,33 +186,72 @@ flowchart TD
 
 ## Setup and Execution Guide
 
+### 1. Clone the Repository
+
 ```bash
-# 1. Clone the repository
-git clone [https://github.com/](https://github.com/)<ORG_NAME>/<REPO_NAME>.git
+git clone https://github.com/<ORG_NAME>/<REPO_NAME>.git
 cd <REPO_NAME>
+```
 
-# 2. Initialize a virtual environment
-python -m venv .venv && source .venv/bin/activate
+### 2. Initialize a Virtual Environment
 
-# 3. Install required dependencies
+```bash
+python -m venv .venv
+source .venv/bin/activate
+```
+
+For Windows:
+
+```powershell
+python -m venv .venv
+.venv\Scripts\activate
+```
+
+### 3. Install Required Dependencies
+
+```bash
 pip install -r requirements.txt
+```
 
-# 4. Ingest the dataset (Requires Kaggle API credentials)
+### 4. Ingest the Dataset
+
+Requires Kaggle API credentials.
+
+```bash
 kaggle datasets download -d moazawadali/plant-leaf-diseases -p data/ --unzip
+```
 
-# 5. Execute an experimental training run
+### 5. Execute an Experimental Training Run
+
+```bash
 python -m src.train --config configs/base.yaml \
     --model efficientnetv2 \
-    --strategy partial_ft      # Options: feature_extraction | partial_ft | full_ft
+    --strategy partial_ft
+```
 
-# 6. Evaluate model performance and generate visualizations
+Available strategies:
+
+- `feature_extraction`
+- `partial_ft`
+- `full_ft`
+
+### 6. Evaluate Model Performance and Generate Visualizations
+
+```bash
 python -m src.evaluate --run results/efficientnetv2_partial_ft
+```
 
-# 7. Generate Grad-CAM interpretability maps
+### 7. Generate Grad-CAM Interpretability Maps
+
+```bash
 python -m src.gradcam --run results/efficientnetv2_partial_ft --n 12
+```
 
-# 8. Conduct benchmarking and robustness evaluations
+### 8. Conduct Benchmarking and Robustness Evaluations
+
+```bash
 python -m src.benchmark --run results/efficientnetv2_partial_ft
+
 python -m src.robustness --run results/efficientnetv2_partial_ft
 ```
 
@@ -209,7 +259,7 @@ python -m src.robustness --run results/efficientnetv2_partial_ft
 
 *Note: Tables will be populated upon the conclusion of the computational experiments. The following structure is repeated across all three adaptation strategies.*
 
-**Classification Performance**
+### Classification Performance
 
 | Architecture | Accuracy | Precision | Recall | F1-Score | AUC | Parameter Count | Training Duration |
 |---|---|---|---|---|---|---|---|
@@ -219,7 +269,7 @@ python -m src.robustness --run results/efficientnetv2_partial_ft
 | ConvNeXtV2 | – | – | – | – | – | – | – |
 | ViT-Base | – | – | – | – | – | – | – |
 
-**Computational Efficiency and Robustness**
+### Computational Efficiency and Robustness
 
 | Architecture | FLOPs | CPU Latency (ms) | TFLite Footprint (MB) | Perturbation Accuracy (Blur/Noise) | OOD Accuracy |
 |---|---|---|---|---|---|
@@ -234,11 +284,19 @@ Grad-CAM analysis is applied to validate that the models' predictive capabilitie
 
 ## Interactive Demonstration
 
-A web-based interface (hosted via Hugging Face Spaces) has been developed to allow external validation of the models. The application processes uploaded botanical imagery to output disease classifications, confidence distributions, and corresponding Grad-CAM spatial heatmaps. *(Link to be provided upon deployment).*
+A web-based interface (hosted via Hugging Face Spaces) has been developed to allow external validation of the models.
+
+The application processes uploaded botanical imagery to output:
+
+- Disease classifications.
+- Confidence distributions.
+- Corresponding Grad-CAM spatial heatmaps.
+
+*Link to be provided upon deployment.*
 
 ## Limitations and Future Work
 
-- **Current Limitations:** The primary dataset relies heavily on controlled-environment imagery, which may constrain generalization to in-situ agricultural contexts. 
+- **Current Limitations:** The primary dataset relies heavily on controlled-environment imagery, which may constrain generalization to in-situ agricultural contexts.
 - **Future Perspectives:** Subsequent research should explore multimodal data integration (e.g., environmental sensors alongside optical data), deployment optimization for low-power edge devices, and real-time drone-based inference pipelines.
 
 ## Deliverables Checklist
@@ -265,5 +323,7 @@ A web-based interface (hosted via Hugging Face Spaces) has been developed to all
 ---
 
 <div align="center">
+
 <sub>Master ISI S3 · Deep Learning (Transfer Learning) · FSSM, Université Cadi Ayyad · Academic Year 2026–2027</sub>
+
 </div>
