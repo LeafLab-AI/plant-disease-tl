@@ -1,15 +1,21 @@
-# Runtime dependencies (pin exact versions with a lockfile before the final run)
-torch                       # core framework
-torchvision
-timm>=1.0.30                   # EfficientNetV2, MobileNetV4, ConvNeXtV2, ViT-Base
-scikit-learn                # metrics, StratifiedKFold
-pytorch-grad-cam            # Grad-CAM (CNN + ViT)
-mlflow                      # experiment tracking
-omegaconf                   # config management
-albumentations              # augmentation
-gradio                      # demo app
+tensorflow[and-cuda]
+keras
+keras-cv
+scikit-learn
+scipy
+numpy
+pandas
+tf-keras-vis
+mlflow
+omegaconf
+albumentations
+opencv-python-headless
+gradio
+tf2onnx
 onnx
-onnxruntime                 # export + latency benchmark
-fvcore                      # FLOPs counting
-imagehash                   # near-duplicate detection (data leakage check)
-safetensors                 # safe weight serialization (no pickle)
+onnxruntime
+keras-flops
+tensorflow-model-optimization
+imagehash
+Pillow
+safetensors
