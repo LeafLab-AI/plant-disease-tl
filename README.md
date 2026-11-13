@@ -72,8 +72,10 @@ This project evaluates modern pre-trained architectures against a baseline CNN t
 |---|---|---|
 | **EfficientNetV2** | `keras.applications` or KerasHub presets | Official Support |
 | **ViT-Base** | KerasHub (`vit_base_patch16_224_imagenet`) | Official Support |
-| **ConvNeXtV2** | `kerasformers` (third-party Keras 3 port from timm weights) | Requires preliminary validation |
+| **ConvNeXtV2** | In-repo Keras 3 port ([`src/convnextv2.py`](src/convnextv2.py)) loading timm's `convnextv2_tiny.fcmae_ft_in1k` weights | Validated: features and logits match timm within 1e-3 ([`tests/test_convnextv2.py`](tests/test_convnextv2.py)) |
 | **MobileNetV4** | Currently unavailable natively in TensorFlow/Keras | See fallback protocol below |
+
+> **ConvNeXtV2 weights licence:** the official FAIR ConvNeXtV2 checkpoints are released under **CC-BY-NC-4.0** (non-commercial use only), which covers this academic study and a non-commercial demo.
 
 > **Fallback Protocol for MobileNetV4:** Should MobileNetV4 weights remain unavailable in the TensorFlow ecosystem, **MobileNetV3-Large** will be substituted as the representative lightweight architecture. This substitution will be explicitly documented in the final manuscript.
 
