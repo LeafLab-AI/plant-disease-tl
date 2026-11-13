@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import json
 import time
 from pathlib import Path
@@ -8,9 +9,10 @@ import tensorflow as tf
 import yaml
 
 from src.datasets import DataManager
+from src.evaluate import ModelEvaluator
 from src.models import ModelBuilder
 from src.strategies import StrategyManager
-from src.evaluate import ModelEvaluator
+from src.tracking import MLflowTracker
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
@@ -33,15 +35,19 @@ class WarmupCallback(keras.callbacks.Callback):
 
 
 class ExperimentRunner:
-    def __init__(self, cfg: dict, model_name: str, strategy: str, data_manager: DataManager = None):
+    def __init__(self, cfg: dict, model_name: str, strategy: str, data_manager: DataManager | None = None):
         self.cfg = cfg
         self.model_name = model_name
         self.strategy = strategy
         self.data_manager = data_manager or DataManager(cfg)
-        self.run_dir = PROJECT_ROOT / "results" / f"{model_name}_{strategy}_s{cfg['seed']}"
+        self.tracker = MLflowTracker(cfg)
+        self.run_name = f"{model_name}_{strategy}_s{cfg['seed']}"
+        self.run_dir = PROJECT_ROOT / "results" / self.run_name
         self.lr = float(cfg["training"]["lr"][strategy])
 
     def setup_environment(self) -> None:
+        for gpu in tf.config.list_physical_devices("GPU"):
+            tf.config.experimental.set_memory_growth(gpu, True)
         if self.cfg["training"]["mixed_precision"]:
             keras.mixed_precision.set_global_policy("mixed_float16")
         keras.utils.set_random_seed(self.cfg["seed"])
@@ -49,7 +55,7 @@ class ExperimentRunner:
         (self.run_dir / "config.yaml").write_text(yaml.safe_dump(self.cfg, sort_keys=False))
 
     def _build_callbacks(self) -> list[keras.callbacks.Callback]:
-        return [
+        callbacks: list[keras.callbacks.Callback] = [
             keras.callbacks.ModelCheckpoint(
                 str(self.run_dir / "best.keras"), monitor="val_macro_f1", mode="max", save_best_only=True
             ),
@@ -62,48 +68,100 @@ class ExperimentRunner:
             keras.callbacks.CSVLogger(str(self.run_dir / "history.csv")),
             WarmupCallback(self.cfg["training"]["warmup_epochs"][self.strategy], self.lr),
         ]
+        mlflow_cb = self.tracker.epoch_callback()
+        if mlflow_cb is not None:
+            callbacks.append(mlflow_cb)
+        return callbacks
 
     def run(self) -> tuple[Path, dict, keras.callbacks.History]:
         self.setup_environment()
         self.data_manager.prepare_data()
 
-        train_ds = self.data_manager.get_dataset("train", training=True)
-        val_ds = self.data_manager.get_dataset("val", training=False)
-        test_ds = self.data_manager.get_dataset("test", training=False)
-        weights = self.data_manager.get_class_weights() if self.cfg["training"]["class_weights"] else None
-
-        builder = ModelBuilder(self.model_name, self.data_manager.num_classes, self.cfg["data"]["img_size"], self.cfg["training"]["dropout"])
-        model, backbone = builder.build()
-        
-        StrategyManager.apply_strategy(backbone, self.strategy, self.cfg["training"]["unfreeze_fraction"])
-        params = StrategyManager.summarize_trainable(model)
-
-        model.compile(
-            optimizer=keras.optimizers.AdamW(
-                self.lr, weight_decay=self.cfg["training"]["weight_decay"], clipnorm=self.cfg["training"]["gradient_clip_norm"]
-            ),
-            loss=keras.losses.SparseCategoricalCrossentropy(),
-            metrics=[
-                keras.metrics.SparseCategoricalAccuracy(name="accuracy"),
-                SparseF1Score(average="macro", name="macro_f1")
-            ],
-        )
-
-        t0 = time.time()
-        history = model.fit(
-            train_ds, validation_data=val_ds, epochs=self.cfg["training"]["epochs"][self.strategy],
-            class_weight=weights, callbacks=self._build_callbacks(), verbose=2
-        )
-        train_sec = time.time() - t0
-
-        best_model = keras.models.load_model(self.run_dir / "best.keras", compile=False)
-        evaluator = ModelEvaluator(self.run_dir, self.data_manager.class_to_idx)
-        eval_metrics = evaluator.evaluate(best_model, test_ds)
-
-        metrics = {
-            **eval_metrics, **params, "train_seconds": train_sec,
-            "epochs_run": len(history.history["loss"]), "strategy": self.strategy, "model": self.model_name
+        tags = {
+            "model": self.model_name,
+            "strategy": self.strategy,
+            "seed": self.cfg["seed"],
+            "dataset_sha256": self.data_manager.dataset_fingerprint()[:16],
         }
-        (self.run_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
-        
+
+        with self.tracker.start_run(run_name=self.run_name, tags=tags):
+            self.tracker.log_params({
+                "model": self.model_name,
+                "strategy": self.strategy,
+                "lr": self.lr,
+                "dataset_sha256": self.data_manager.dataset_fingerprint(),
+                **self.cfg,
+            })
+
+            train_ds = self.data_manager.get_dataset("train", training=True)
+            val_ds = self.data_manager.get_dataset("val", training=False)
+            test_ds = self.data_manager.get_dataset("test", training=False)
+            weights = self.data_manager.get_class_weights() if self.cfg["training"]["class_weights"] else None
+
+            builder = ModelBuilder(
+                self.model_name,
+                self.data_manager.num_classes,
+                self.cfg["data"]["img_size"],
+                self.cfg["training"]["dropout"],
+            )
+            model, backbone = builder.build(strategy=self.strategy)
+
+            StrategyManager.apply_strategy(
+                backbone,
+                self.strategy,
+                self.cfg["training"]["unfreeze_fraction"],
+                freeze_bn=self.cfg["training"].get("freeze_bn", True),
+            )
+            params = StrategyManager.summarize_trainable(model)
+            self.tracker.log_params(params)
+
+            model.compile(
+                optimizer=keras.optimizers.AdamW(
+                    self.lr,
+                    weight_decay=self.cfg["training"]["weight_decay"],
+                    clipnorm=self.cfg["training"]["gradient_clip_norm"],
+                ),
+                loss=keras.losses.SparseCategoricalCrossentropy(),
+                metrics=[
+                    keras.metrics.SparseCategoricalAccuracy(name="accuracy"),
+                    SparseF1Score(average="macro", name="macro_f1"),
+                ],
+            )
+
+            t0 = time.time()
+            history = model.fit(
+                train_ds,
+                validation_data=val_ds,
+                epochs=self.cfg["training"]["epochs"][self.strategy],
+                class_weight=weights,
+                callbacks=self._build_callbacks(),
+                verbose=2,
+            )
+            train_sec = time.time() - t0
+
+            best_model = keras.models.load_model(
+                self.run_dir / "best.keras", 
+                compile=False,
+                custom_objects={"SparseF1Score": SparseF1Score}
+            )
+            evaluator = ModelEvaluator(self.run_dir, self.data_manager.class_to_idx)
+            eval_metrics = evaluator.evaluate(best_model, test_ds)
+
+            metrics = {
+                **eval_metrics,
+                **params,
+                "train_seconds": train_sec,
+                "epochs_run": len(history.history["loss"]),
+                "strategy": self.strategy,
+                "model": self.model_name,
+            }
+            (self.run_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
+
+            self.tracker.log_metrics({
+                **{f"test_{k}": v for k, v in eval_metrics.items()},
+                "train_seconds": train_sec,
+                "epochs_run": len(history.history["loss"]),
+            })
+            self.tracker.log_artifacts(self.run_dir)
+
         return self.run_dir, metrics, history
