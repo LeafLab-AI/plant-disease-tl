@@ -5,21 +5,27 @@ Google VM that only sees what the bootstrap cell cloned from GitHub. This module
 rest of the per-VM setup:
 
 * installs the few packages Colab does not ship (requirements-colab.txt), once per VM;
-* downloads the Kaggle dataset into data/ if it is not there yet;
+* downloads the Kaggle dataset into data/ if it is not there yet (anonymously, unless a
+  KAGGLE_API_TOKEN is available, in which case the archive checksum is also recorded);
 * forwards optional MLflow credentials so runs survive the VM being recycled.
 
-Secrets are read from, in order: environment variables, Colab Secrets
-(``google.colab.userdata``), then an interactive prompt for required ones. Nothing is
-ever written to the repository.
+No secret is required. Optional ones are read from environment variables or Colab
+Secrets (``google.colab.userdata``) and are never written to the repository.
 """
 from __future__ import annotations
 
+import json
 import os
+import shutil
 import subprocess
 import sys
+from collections import Counter
+from datetime import datetime, timezone
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+KAGGLE_DATASET = "moazawadali/plant-leaf-diseases"
+IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp"}
 _INSTALLED_MARKER = Path("/tmp/.plant_disease_tl_deps")
 _MLFLOW_VARS = ("MLFLOW_TRACKING_URI", "MLFLOW_TRACKING_USERNAME", "MLFLOW_TRACKING_PASSWORD")
 
@@ -54,17 +60,47 @@ def _install_dependencies() -> None:
     _INSTALLED_MARKER.touch()
 
 
+def _download_public(data: Path, dataset: str = KAGGLE_DATASET) -> None:
+    """Anonymous download through kagglehub (public datasets need no Kaggle account)."""
+    import kagglehub
+
+    raw = data / "raw"
+    src = Path(kagglehub.dataset_download(dataset))  # .../<owner>/<name>/versions/<n>
+    data.mkdir(parents=True, exist_ok=True)
+    if raw.exists():
+        raw.rmdir()  # only reached when it is empty
+    shutil.move(str(src), str(raw))
+
+    images = [f for f in raw.rglob("*") if f.suffix.lower() in IMAGE_EXTS]
+    provenance = {
+        "dataset": dataset,
+        "url": f"https://www.kaggle.com/datasets/{dataset}",
+        "version": int(src.name) if src.name.isdigit() else src.name,
+        "method": "kagglehub anonymous download (no archive checksum available)",
+        "downloaded_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "n_images": len(images),
+        "images_per_folder": dict(sorted(
+            Counter(f.parent.relative_to(raw).as_posix() for f in images).items()
+        )),
+    }
+    (data / "provenance.json").write_text(json.dumps(provenance, indent=2), encoding="utf-8")
+    print(f"{len(images)} images -> {raw}")
+
+
 def _ensure_dataset() -> None:
     data = PROJECT_ROOT / "data"
     raw = data / "raw"
     if raw.exists() and any(raw.iterdir()):
         return
-    get_secret("KAGGLE_API_TOKEN")
-    subprocess.run(
-        [sys.executable, str(PROJECT_ROOT / "scripts" / "download_data.py"), "--out", str(data)],
-        check=True,
-        cwd=PROJECT_ROOT,
-    )
+    if get_secret("KAGGLE_API_TOKEN", required=False):
+        # Authenticated path also pins the archive SHA-256 in provenance.json.
+        subprocess.run(
+            [sys.executable, str(PROJECT_ROOT / "scripts" / "download_data.py"), "--out", str(data)],
+            check=True,
+            cwd=PROJECT_ROOT,
+        )
+    else:
+        _download_public(data)
 
 
 def _configure_tracking() -> None:

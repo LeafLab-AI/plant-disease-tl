@@ -192,15 +192,14 @@ flowchart TD
 
 With the [Colab extension for VS Code](https://marketplace.visualstudio.com/items?itemName=Google.colab), the notebook stays on your machine but its code runs on a Google VM that cannot see your local files. The first code cell of every notebook handles this: on a Colab kernel it clones the repository into `/content/plant-disease-tl`, installs [`requirements-colab.txt`](requirements-colab.txt) and downloads the dataset ([`src/colab.py`](src/colab.py)). On a local kernel it only locates the project root.
 
-**One-time setup (each team member)**
+**No tokens are needed.** The repository is public, and the dataset is downloaded anonymously through `kagglehub`. Optional settings, read from environment variables or Colab Secrets:
 
-| Secret | Required | How to get it |
-|---|---|---|
-| `GITHUB_TOKEN` | Yes (private repo) | GitHub → Settings → Developer settings → Fine-grained token, repository `LeafLab-AI/plant-disease-tl`, permission *Contents: Read-only* |
-| `KAGGLE_API_TOKEN` | Yes (first run on a VM) | kaggle.com → Settings → API → Create New Token |
-| `MLFLOW_TRACKING_URI` (+ `_USERNAME`, `_PASSWORD`) | Recommended | A shared MLflow server, so runs outlive the VM and the whole team sees them |
+| Variable | Effect |
+|---|---|
+| `KAGGLE_API_TOKEN` | Downloads through the Kaggle CLI instead, which also records the archive SHA-256 in `data/provenance.json` |
+| `MLFLOW_TRACKING_URI` (+ `_USERNAME`, `_PASSWORD`) | Logs to a shared MLflow server, so runs outlive the VM and the whole team sees them |
 
-Store them as Colab Secrets (key icon in the Colab web UI, with notebook access enabled) or as environment variables. If neither is found, the bootstrap cell asks for the required ones with a hidden prompt. Never paste a token into a notebook cell.
+Never paste a token into a notebook cell, and keep local secrets in `.env` (git-ignored), not in `.env.example`.
 
 **Every session**
 

@@ -4,4 +4,5 @@
 imagehash
 mlflow
 kaggle
+kagglehub
 safetensors
