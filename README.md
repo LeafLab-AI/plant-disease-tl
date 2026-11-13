@@ -188,6 +188,26 @@ flowchart TD
 
 ## Setup and Execution Guide
 
+### Running the Notebooks on a Colab GPU from VS Code
+
+With the [Colab extension for VS Code](https://marketplace.visualstudio.com/items?itemName=Google.colab), the notebook stays on your machine but its code runs on a Google VM that cannot see your local files. The first code cell of every notebook handles this: on a Colab kernel it clones the repository into `/content/plant-disease-tl`, installs [`requirements-colab.txt`](requirements-colab.txt) and downloads the dataset ([`src/colab.py`](src/colab.py)). On a local kernel it only locates the project root.
+
+**One-time setup (each team member)**
+
+| Secret | Required | How to get it |
+|---|---|---|
+| `GITHUB_TOKEN` | Yes (private repo) | GitHub → Settings → Developer settings → Fine-grained token, repository `LeafLab-AI/plant-disease-tl`, permission *Contents: Read-only* |
+| `KAGGLE_API_TOKEN` | Yes (first run on a VM) | kaggle.com → Settings → API → Create New Token |
+| `MLFLOW_TRACKING_URI` (+ `_USERNAME`, `_PASSWORD`) | Recommended | A shared MLflow server, so runs outlive the VM and the whole team sees them |
+
+Store them as Colab Secrets (key icon in the Colab web UI, with notebook access enabled) or as environment variables. If neither is found, the bootstrap cell asks for the required ones with a hidden prompt. Never paste a token into a notebook cell.
+
+**Every session**
+
+1. Commit and **push** your changes: the Colab VM only sees what is on GitHub.
+2. Set `BRANCH` in the first cell to your branch, then run it. It prints the commit it is running.
+3. Without a remote `MLFLOW_TRACKING_URI`, `results/` and `mlflow.db` live on the VM and are deleted when the runtime is recycled, so copy them elsewhere before disconnecting.
+
 ### 1. Clone the Repository
 
 ```bash

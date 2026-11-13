@@ -1,0 +1,7 @@
+# Extra packages for a Colab runtime. Colab already ships TensorFlow, Keras, numpy,
+# pandas, scikit-learn, matplotlib, Pillow and PyYAML: do NOT add them here,
+# reinstalling them can break Colab's CUDA build of TensorFlow.
+imagehash
+mlflow
+kaggle
+safetensors
