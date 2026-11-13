@@ -20,8 +20,8 @@ data:
 loader:
   batch_size: 16          
   shuffle_buffer: 1000
-  prefetch: 2            
-  num_parallel_calls: 4   
+  prefetch: auto          # tf.data AUTOTUNE: speed only, element order and results unchanged
+  num_parallel_calls: auto
 
 augmentation:
   flip: horizontal
@@ -31,6 +31,7 @@ augmentation:
   fill_mode: reflect
 
 training:
+  log_every_steps: 100    # progress line during each epoch (time, img/s)
   epochs: { feature_extraction: 15, partial_ft: 30, full_ft: 40 }
   optimizer: adamw
   weight_decay: 0.05

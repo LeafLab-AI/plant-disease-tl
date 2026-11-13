@@ -34,6 +34,34 @@ class WarmupCallback(keras.callbacks.Callback):
             self.model.optimizer.learning_rate.assign(self.base_lr * (epoch + 1) / self.warmup_epochs)
 
 
+class StepProgress(keras.callbacks.Callback):
+    """One line every `every` steps: fit(verbose=2) is silent until an epoch ends, which
+    makes a slow epoch indistinguishable from a hang. Shows elapsed time and throughput."""
+
+    def __init__(self, every: int, batch_size: int):
+        super().__init__()
+        self.every = every
+        self.batch_size = batch_size
+
+    def on_epoch_begin(self, epoch, logs=None):
+        self.epoch, self.t0 = epoch + 1, time.time()
+
+    def on_train_batch_end(self, batch, logs=None):
+        step = batch + 1
+        if step == 1 or step % self.every == 0:
+            dt = time.time() - self.t0
+            total = self.params.get("steps") or "?"
+            print(f"  epoch {self.epoch} step {step}/{total}  {dt:6.0f}s  "
+                  f"{step * self.batch_size / max(dt, 1e-9):6.1f} img/s", flush=True)
+
+    def on_test_begin(self, logs=None):
+        self.t_val = time.time()
+        print(f"  epoch {self.epoch} validating...", flush=True)
+
+    def on_test_end(self, logs=None):
+        print(f"  epoch {self.epoch} validation took {time.time() - self.t_val:.0f}s", flush=True)
+
+
 class ExperimentRunner:
     def __init__(self, cfg: dict, model_name: str, strategy: str, data_manager: DataManager | None = None):
         self.cfg = cfg
@@ -67,6 +95,10 @@ class ExperimentRunner:
             ),
             keras.callbacks.CSVLogger(str(self.run_dir / "history.csv")),
             WarmupCallback(self.cfg["training"]["warmup_epochs"][self.strategy], self.lr),
+            StepProgress(
+                int(self.cfg["training"].get("log_every_steps", 100)),
+                int(self.cfg["loader"]["batch_size"]),
+            ),
         ]
         mlflow_cb = self.tracker.epoch_callback()
         if mlflow_cb is not None:
