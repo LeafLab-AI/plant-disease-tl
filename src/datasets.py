@@ -100,14 +100,20 @@ class DataManager:
         if self.df is not None and not force:
             return
 
-        if not force and self.assignments_path.exists() and self.manifest_path.exists():
+        built = force or not (self.assignments_path.exists() and self.manifest_path.exists())
+        if not built:
             self.df = self._attach_paths(pd.read_csv(self.assignments_path))
         else:
             self.df = self._build_manifest()
             self.df = self._deduplicate()
             self.df = self._stratified_group_split()
+
+        # Idempotent, so split files cached before cleaning existed are upgraded on load.
+        self.df, cleaning = self._clean(self.df)
+        if built or cleaning["removed_total"] > 0:
             self.assignments_path.parent.mkdir(parents=True, exist_ok=True)
             self.df.drop(columns=["path"]).to_csv(self.assignments_path, index=False)
+            self._update_report(cleaning)
 
         self._check_files_exist(self.df)
         classes = sorted(self.df["label"].unique())
@@ -188,6 +194,48 @@ class DataManager:
         df = self.df.copy()
         df["group"] = [uf.find(i) for i in range(n)]
         return df
+
+    def _clean(self, df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
+        """Cleaning defined in notebooks/00_data_setup, applied identically for every model.
+
+        * drop_conflicting_groups: a near-duplicate group whose images carry different labels
+          contains at least one wrong label, so the whole group is removed.
+        * one_per_group: keep only the first image (manifest order) of each near-duplicate
+          group, so duplicates are not over-weighted.
+
+        Runs *after* the group split: kept images keep their split, and since groups never
+        cross splits no leakage is possible.
+        """
+        c = self.cfg["data"].get("clean", {})
+        n_before = len(df)
+        conflicting = duplicates = 0
+
+        if c.get("drop_conflicting_groups", True):
+            ok = df.groupby("group")["label"].transform("nunique") == 1
+            conflicting = int((~ok).sum())
+            df = df[ok]
+        if c.get("one_per_group", True):
+            n = len(df)
+            df = df.drop_duplicates(subset="group", keep="first")
+            duplicates = n - len(df)
+
+        df = df.reset_index(drop=True)
+        return df, {
+            "removed_conflicting_label_images": conflicting,
+            "removed_near_duplicates": duplicates,
+            "removed_total": n_before - len(df),
+            "images_after_cleaning": len(df),
+        }
+
+    def _update_report(self, cleaning: dict) -> None:
+        report = json.loads(self.report_path.read_text()) if self.report_path.exists() else {}
+        report["cleaning"] = {**self.cfg["data"].get("clean", {}), **cleaning}
+        report["split_counts"] = {k: int(v) for k, v in self.df["split"].value_counts().items()}
+        report["class_counts_after_cleaning"] = {
+            k: int(v) for k, v in self.df["label"].value_counts().items()
+        }
+        self.report_path.parent.mkdir(parents=True, exist_ok=True)
+        self.report_path.write_text(json.dumps(report, indent=2))
 
     def _stratified_group_split(self) -> pd.DataFrame:
         df = self.df.copy()

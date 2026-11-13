@@ -13,6 +13,9 @@ data:
     method: phash
     hamming_threshold: 5
     hash_size: 8
+  clean:                          # same cleaning as notebooks/00_data_setup, for every model
+    drop_conflicting_groups: true # near-duplicate groups whose images have different labels
+    one_per_group: true           # keep one image per near-duplicate group
 
 loader:
   batch_size: 16          
