@@ -1,1 +1,1 @@
-"""Package marker (enables: python -m src.train)"""
+"""Plant disease transfer-learning research package."""

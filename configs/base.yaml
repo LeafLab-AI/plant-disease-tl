@@ -1,1 +1,53 @@
-# Shared hyper-parameters (same for ALL models)
+seed: 42
+
+data:
+  raw_dir: data/raw
+  manifest: results/preprocessing/manifest.csv
+  assignments: results/preprocessing/assignments.csv
+  pipeline_report: results/preprocessing/pipeline.json
+  img_size: 224
+  split: {train: 0.70, val: 0.15, test: 0.15}
+  min_side: 96
+  image_exts: [.jpg, .jpeg, .png, .bmp, .tif, .tiff, .webp]
+  dedup:
+    method: phash
+    hamming_threshold: 5
+    hash_size: 8
+
+loader:
+  batch_size: 16          
+  shuffle_buffer: 1000
+  prefetch: 2            
+  num_parallel_calls: 4   
+
+augmentation:
+  flip: horizontal
+  rotation: 0.05
+  zoom: 0.10
+  contrast: 0.25
+  fill_mode: reflect
+
+training:
+  epochs: { feature_extraction: 15, partial_ft: 30, full_ft: 40 }
+  optimizer: adamw
+  weight_decay: 0.05
+  gradient_clip_norm: 1.0
+  mixed_precision: true
+  lr: { feature_extraction: 1.0e-3, partial_ft: 1.0e-4, full_ft: 3.0e-5 }
+  warmup_epochs: { feature_extraction: 0, partial_ft: 1, full_ft: 3 }
+  unfreeze_fraction: 0.25
+  dropout: 0.3
+  label_smoothing: 0.0
+  class_weights: true
+  early_stopping:
+    {
+      monitor: val_macro_f1,
+      mode: max,
+      patience: 6,
+      restore_best_weights: true,
+    }
+  reduce_lr: { monitor: val_loss, factor: 0.3, patience: 3, min_lr: 1.0e-7 }
+  checkpoint: { monitor: val_macro_f1, mode: max, save_best_only: true }
+
+model: null
+strategy: null

@@ -19,3 +19,15 @@ tensorflow-model-optimization
 imagehash
 Pillow
 safetensors
+ruff
+mypy                        
+bandit
+semgrep                     
+pip-audit                   
+pytest
+pytest-cov                 
+pre-commit
+nbstripout                  
+modelscan                   
+kaggle                      
+six                         
