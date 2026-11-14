@@ -1,0 +1,76 @@
+seed: 42
+data:
+  raw_dir: data/raw
+  manifest: results/preprocessing/manifest.csv
+  assignments: results/preprocessing/assignments.csv
+  pipeline_report: results/preprocessing/pipeline.json
+  img_size: 224
+  split:
+    train: 0.7
+    val: 0.15
+    test: 0.15
+  min_side: 96
+  image_exts:
+  - .jpg
+  - .jpeg
+  - .png
+  - .bmp
+  - .tif
+  - .tiff
+  - .webp
+  dedup:
+    method: phash
+    hamming_threshold: 5
+    hash_size: 8
+  clean:
+    drop_conflicting_groups: true
+    one_per_group: true
+loader:
+  batch_size: 16
+  shuffle_buffer: 1000
+  prefetch: auto
+  num_parallel_calls: auto
+augmentation:
+  flip: horizontal
+  rotation: 0.05
+  zoom: 0.1
+  contrast: 0.25
+  fill_mode: reflect
+training:
+  log_every_steps: 100
+  epochs:
+    feature_extraction: 15
+    partial_ft: 30
+    full_ft: 40
+  optimizer: adamw
+  weight_decay: 0.05
+  gradient_clip_norm: 1.0
+  mixed_precision: true
+  lr:
+    feature_extraction: 0.001
+    partial_ft: 0.0001
+    full_ft: 3.0e-05
+  warmup_epochs:
+    feature_extraction: 0
+    partial_ft: 1
+    full_ft: 3
+  unfreeze_fraction: 0.25
+  dropout: 0.3
+  label_smoothing: 0.0
+  class_weights: true
+  early_stopping:
+    monitor: val_macro_f1
+    mode: max
+    patience: 6
+    restore_best_weights: true
+  reduce_lr:
+    monitor: val_loss
+    factor: 0.3
+    patience: 3
+    min_lr: 1.0e-07
+  checkpoint:
+    monitor: val_macro_f1
+    mode: max
+    save_best_only: true
+model: null
+strategy: null

@@ -1,0 +1,17 @@
+{
+  "macro_f1": 0.9865239824759721,
+  "macro_precision": 0.9855134236441097,
+  "macro_recall": 0.9877309594642325,
+  "accuracy": 0.9866640896791651,
+  "auc_macro_ovr": 0.9997371187015748,
+  "ece": 0.009577936934581545,
+  "n_test": 5174,
+  "top3_accuracy": 0.9988403556242752,
+  "trainable_params": 27882645,
+  "total_params": 27882645,
+  "trainable_fraction": 1.0,
+  "train_seconds": 2119.1201174259186,
+  "epochs_run": 18,
+  "strategy": "full_ft",
+  "model": "convnextv2"
+}
