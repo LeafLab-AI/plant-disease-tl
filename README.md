@@ -278,17 +278,25 @@ python -m src.robustness --run results/efficientnetv2_partial_ft
 
 ## Empirical Results
 
-*Note: Tables will be populated upon the conclusion of the computational experiments. The following structure is repeated across all three adaptation strategies.*
+*Status: ConvNeXtV2 complete (single seed). The other architectures are pending; EfficientNetV2 is being re-run on the cleaned dataset. Tables are updated as experiments conclude.*
+
+**Setup.** Cleaned dataset of 34,481 images (21 classes) after removing 420 images from near-duplicate groups with conflicting labels and 5,322 redundant near-duplicates; group-stratified split of 24,135 train / 5,172 validation / 5,174 test images. Seed 42, mixed precision, hyperparameters from [`configs/base.yaml`](configs/base.yaml), trained on an NVIDIA RTX 3070 (8 GB). All metrics are computed on the held-out test set; precision, recall and F1 are macro-averaged, AUC is macro one-vs-rest.
 
 ### Classification Performance
 
-| Architecture | Accuracy | Precision | Recall | F1-Score | AUC | Parameter Count | Training Duration |
-|---|---|---|---|---|---|---|---|
-| Baseline CNN | – | – | – | – | – | – | – |
-| EfficientNetV2 | – | – | – | – | – | – | – |
-| MobileNetV4 | – | – | – | – | – | – | – |
-| ConvNeXtV2 | – | – | – | – | – | – | – |
-| ViT-Base | – | – | – | – | – | – | – |
+| Architecture | Strategy | Accuracy | Precision | Recall | F1-Score | AUC | Trainable / Total Params | Epochs | Training Duration |
+|---|---|---|---|---|---|---|---|---|---|
+| Baseline CNN | From scratch | – | – | – | – | – | – | – | – |
+| EfficientNetV2 | All strategies | – | – | – | – | – | – | – | – |
+| MobileNetV4 | All strategies | – | – | – | – | – | – | – | – |
+| ConvNeXtV2-T | Feature extraction | 0.8846 | 0.8953 | 0.9077 | 0.8989 | 0.9950 | 17.7K / 27.9M | 15 † | 11 min |
+| ConvNeXtV2-T | Partial fine-tuning | 0.9718 | 0.9742 | 0.9755 | 0.9746 | 0.9997 | 7.1M / 27.9M | 30 † | 25 min |
+| ConvNeXtV2-T | **Full fine-tuning** | **0.9867** | **0.9855** | **0.9877** | **0.9865** | **0.9997** | 27.9M / 27.9M | 18 | 35 min |
+| ViT-Base | All strategies | – | – | – | – | – | – | – | – |
+
+† Reached the epoch budget for that strategy without early stopping, so further training might still improve it; the budget is identical across architectures.
+
+**ConvNeXtV2 observations.** Adaptation depth drives performance: test macro-F1 rises from 0.899 with a frozen backbone to 0.975 when the last 25% of parameters are tuned, and to 0.987 with full fine-tuning. Calibration improves in the same order (expected calibration error 0.035 → 0.013 → 0.010), and top-3 accuracy reaches 0.999 with full fine-tuning. Full fine-tuning costs about 3× the training time of feature extraction and early-stopped after 18 of 40 epochs.
 
 ### Computational Efficiency and Robustness
 
